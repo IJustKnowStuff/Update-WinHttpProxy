@@ -1,0 +1,84 @@
+
+
+<#
+.SYNOPSIS
+    Detects currrent WINHTTP proxy and updates it.
+.DESCRIPTION
+    Checks the current configutation of the WINHTTP proxy (netsh winhttp show proxy) and updates it as per provided parameters.
+    User get-help CheckWinHttpProxy -examples (or -full) to see explaination of parameters.
+.EXAMPLE
+    PS C:\> CheckWinHttpProxy -bypassurl "*.microsoft.com"
+    Add's "*.microsoft.com" to the bypass list if it isn't already present.
+.EXAMPLE
+    PS C:\> CheckWinHttpProxy -bypassurl "*.microsoft.com","*.symantec.com"
+    Add's both "*.microsoft.com" and "*.symantec.com" to the bypass list if the URL's aren't already present.
+.EXAMPLE
+    PS C:\> CheckWinHttpProxy -bypassurl "*.microsoft.com" -resetbypass
+    Empty's the Bypass List, then add's "*.microsoft.com" to the bypass list if it isn't already present.
+.EXAMPLE
+    PS C:\> CheckWinHttpProxy -resetbypass
+    Empty's the Bypass List
+.NOTES
+    Created by Beau McMahon 17/02/2020
+    Email: emailme.beau@gmail.com
+#>
+
+[CmdletBinding()]
+    param (
+        
+        [Parameter(Mandatory=$FALSE)]
+        [string[]]$BypassURL,
+
+        [Parameter(Mandatory=$FALSE)]
+        [switch]
+        $ResetBypass
+    )
+    
+$WinHTTPValue = (Invoke-Command -Command {netsh winhttp show proxy} | where-object{$_ -ne ""}).trim()
+$WinHTTPValue |  ForEach-Object{
+    IF($_ -eq "Direct access (no proxy server).")
+    {
+        $ProxyConfigured=$FALSE
+        Write-Output "Detected WinHTTP proxy is not configured"
+    }
+    IF($_ -like "Proxy Server(s) :*")
+    {
+        $ProxyConfigured=$TRUE            
+        $ProxyAddress = ($_.split(":",2))[1].trim()
+        Write-Output "Detected WinHTTP proxy is configured as [$ProxyAddress]"
+    }
+    IF($_ -match "^Bypass List" )
+    {
+        $BypassList = ($_ -split ":")[1].trim()
+        Write-Output "Detected WinHTTP proxy bypasslist configured as [$($BypassList)]"
+    }
+}  
+
+IF($ProxyConfigured -eq $TRUE)
+{
+            
+    IF($ResetBypass)
+    {
+        Write-Output "ResetBypass switch enabled. Clearing Bypass List before updating."
+        Invoke-Command -Command {netsh winhttp set proxy proxy-server="$ProxyAddress"} | out-null     
+        Write-Output "Ran Command: netsh winhttp set proxy proxy-server=`"$ProxyAddress`""
+        $BypassList="(none)"
+    }
+    
+    $UpdatedBypassList=$BypassList
+    
+    ForEach($URL in $BypassURL)
+    {
+                    
+        IF($BypassList.split(";") -match "^$URL"){Write-Output "WinHTTP Proxy bypasslist already contains $URL"}
+        ELSE{
+            IF($UpdatedBypassList -eq "(none)"){$UpdatedBypassList = "$URL"}            
+            ELSE{$UpdatedBypassList = "$URL;"+$UpdatedBypassList}
+
+            Invoke-Command -Command {netsh winhttp set proxy proxy-server="$ProxyAddress" bypass-list="$UpdatedBypassList"} | out-null
+            Write-Output "Ran Command: netsh winhttp set proxy proxy-server=`"$ProxyAddress`" bypass-list=`"$($UpdatedBypassList)`""
+            #Invoke-Command -Command {netsh winhttp reset proxy} 
+        }
+        
+    }
+}
