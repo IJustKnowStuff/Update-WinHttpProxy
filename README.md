@@ -1,6 +1,6 @@
 # Update-WinHttpProxy
 Checks the current configutation of the WINHTTP proxy (netsh winhttp show proxy) and updates it as per provided parameters.
-User get-help CheckWinHttpProxy -examples (or -full) to see explaination of parameters.
+Use get-help CheckWinHttpProxy -examples (or -full) to see explaination of parameters.
 
 EXAMPLE
 
